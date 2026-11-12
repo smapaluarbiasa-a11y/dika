@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload Soal SMAN 1 Pakem</title>
+    <meta name="description" content="Sistem Informasi Repositori & Upload Dokumen Naskah Soal Ujian (PDF & Word DOCX) SMAN 1 Pakem." />
+    <meta property="og:title" content="Upload Soal SMAN 1 Pakem" />
+    <meta property="og:description" content="Sistem Informasi Repositori & Upload Dokumen Naskah Soal Ujian (PDF & Word DOCX) SMAN 1 Pakem." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        // Provide getter & setter for window.fetch so browser extensions modifying fetch do not throw TypeError
+        try {
+          var _origFetch = window.fetch ? window.fetch.bind(window) : null;
+          var _currentFetch = _origFetch;
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get: function() {
+              return _currentFetch;
+            },
+            set: function(fn) {
+              _currentFetch = fn;
+            }
+          });
+        } catch (_) {}
+
+        // Suppress unhandled errors originating from external browser extensions
+        window.addEventListener('error', function(event) {
+          if (
+            (event.filename && (event.filename.indexOf('chrome-extension://') !== -1 || event.filename.indexOf('moz-extension://') !== -1)) ||
+            (event.error && event.error.stack && (event.error.stack.indexOf('chrome-extension://') !== -1 || event.error.stack.indexOf('moz-extension://') !== -1))
+          ) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

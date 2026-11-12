@@ -1,0 +1,8 @@
+{
+  "name": "SIM-Naskah Soal SMA Negeri 1 Teladan",
+  "description": "Sistem Informasi Manajemen & Repositori Pengunggahan Dokumen Naskah Soal Ujian (PDF & Word DOCX) Panitia Asesmen Sekolah",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
