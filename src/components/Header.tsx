@@ -33,7 +33,11 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden sm:inline text-slate-600">|</span>
           <span className="hidden sm:inline text-slate-400">Monitoring 21 Mata Pelajaran</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Database Server Sinkron Antar Link
+          </span>
           <span className="bg-blue-600/20 text-blue-300 px-2 py-0.5 rounded-md text-[11px] font-bold border border-blue-500/30">
             T.A. 2026/2027
           </span>

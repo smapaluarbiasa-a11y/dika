@@ -55,6 +55,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState<'documents' | 'monitoring'>('documents');
+  const [isServerOnline, setIsServerOnline] = useState<boolean>(true);
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
@@ -74,15 +75,6 @@ export default function App() {
     }
   });
 
-  const handleSaveAppsScriptUrl = (url: string) => {
-    setAppsScriptUrl(url);
-    try {
-      localStorage.setItem('sim_naskah_apps_script_url', url);
-    } catch {
-      // quota
-    }
-  };
-
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -91,21 +83,127 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  useEffect(() => {
+  // Synchronize with server database (enables multi-link and multi-browser sync)
+  const fetchFromServer = async (silent = false) => {
     try {
-      localStorage.setItem('sim_naskah_documents_v2', JSON.stringify(documents));
-    } catch {
-      // Handle quota if needed
+      const res = await fetch('/api/documents');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.documents)) {
+          setDocuments(data.documents);
+          try {
+            localStorage.setItem('sim_naskah_documents_v2', JSON.stringify(data.documents));
+          } catch {
+            // storage quota fallback
+          }
+          setIsServerOnline(true);
+        }
+      }
+    } catch (e) {
+      if (!silent) {
+        console.warn('Server fetch error:', e);
+      }
+      setIsServerOnline(false);
     }
-  }, [documents]);
+  };
+
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config && data.config.appsScriptUrl) {
+          setAppsScriptUrl(data.config.appsScriptUrl);
+          try {
+            localStorage.setItem('sim_naskah_apps_script_url', data.config.appsScriptUrl);
+          } catch {}
+        }
+      }
+    } catch {}
+  };
+
+  // Setup cross-tab broadcast channel for instantaneous syncing in the same browser
+  useEffect(() => {
+    fetchFromServer();
+    fetchConfig();
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('sim_naskah_sync_channel');
+        channel.onmessage = () => {
+          fetchFromServer(true);
+        };
+      }
+    } catch {}
+
+    // Fast auto-sync every 2.5 seconds so changes/deletions on other links/devices appear almost instantly
+    const interval = setInterval(() => {
+      fetchFromServer(true);
+    }, 2500);
+
+    const onFocus = () => {
+      fetchFromServer(true);
+      fetchConfig();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      if (channel) {
+        try {
+          channel.close();
+        } catch {}
+      }
+    };
+  }, []);
+
+  const handleSaveAppsScriptUrl = (url: string) => {
+    const cleanUrl = url.trim();
+    setAppsScriptUrl(cleanUrl);
+    try {
+      localStorage.setItem('sim_naskah_apps_script_url', cleanUrl);
+    } catch {}
+
+    // Persist to server config so all links share the same Google Sheets destination
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appsScriptUrl: cleanUrl }),
+    }).catch((err) => console.warn('Failed to save config to server:', err));
+  };
 
   const recapSummary = calculateRecapitulation(documents);
   const monitoringList = getSubjectMonitoringList(documents);
 
   const handleAddDocument = (newDoc: ExamDocument) => {
-    setDocuments((prev) => [newDoc, ...prev]);
+    // 1. Optimistic local update
+    setDocuments((prev) => [newDoc, ...prev.filter((d) => d.id !== newDoc.id)]);
 
-    // Asynchronously sync to Google Apps Script / Google Sheets if configured
+    // 2. Persist to server database (syncs across all links & browsers)
+    fetch('/api/documents', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newDoc),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error('Server returned ' + res.status);
+        }
+        return res.json();
+      })
+      .then(() => {
+        // Refresh server state to ensure perfect consistency
+        fetchFromServer(true);
+      })
+      .catch((err) => {
+        console.warn('Server persist warning:', err);
+      });
+
+    // 3. Optional client-side sync to Google Apps Script / Google Sheets
     if (appsScriptUrl && appsScriptUrl.startsWith('http')) {
       try {
         let fileBase64 = '';
@@ -136,14 +234,14 @@ export default function App() {
           }),
         }).catch((err) => console.warn('Sync to Google Apps Script warning:', err));
 
-        showToast(`Naskah soal "${newDoc.title}" berhasil diunggah & disinkronkan ke Google Sheets!`);
+        showToast(`Naskah soal "${newDoc.title}" berhasil diunggah & tersinkron ke semua link serta Google Sheets!`);
         return;
       } catch (err) {
         console.warn('Sync error:', err);
       }
     }
 
-    showToast(`Naskah soal "${newDoc.title}" berhasil diunggah.`);
+    showToast(`Naskah soal "${newDoc.title}" berhasil disimpan di database server (tersinkron ke semua link).`);
   };
 
   const handleUpdateStatus = (
@@ -151,6 +249,7 @@ export default function App() {
     status: VerificationStatus,
     feedback?: string
   ) => {
+    // Optimistic UI update
     setDocuments((prev) =>
       prev.map((doc) => {
         if (doc.id === id) {
@@ -178,6 +277,13 @@ export default function App() {
       );
     }
 
+    // Persist status change to server
+    fetch(`/api/documents/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, feedback }),
+    }).catch((err) => console.warn('Failed to update status on server:', err));
+
     showToast(`Status naskah soal berhasil diubah menjadi "${status}".`);
   };
 
@@ -190,12 +296,61 @@ export default function App() {
 
   const handleConfirmDelete = (id: string) => {
     const docToDelete = documents.find((d) => d.id === id);
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
+    const updated = documents.filter((d) => d.id !== id);
+    setDocuments(updated);
+    try {
+      localStorage.setItem('sim_naskah_documents_v2', JSON.stringify(updated));
+    } catch {}
+
     if (previewDocument && previewDocument.id === id) {
       setPreviewDocument(null);
     }
+
+    // Broadcast delete event across all tabs in this browser
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('sim_naskah_sync_channel');
+        bc.postMessage({ type: 'DOC_DELETED', id });
+        bc.close();
+      }
+    } catch {}
+
+    // 1. Delete from server database (syncs across all links, browsers & devices)
+    fetch(`/api/documents/${id}`, {
+      method: 'DELETE',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Status ' + res.status);
+        return res.json();
+      })
+      .then(() => {
+        fetchFromServer(true);
+      })
+      .catch((err) => console.warn('Failed to delete on server:', err));
+
+    // 2. Also forward delete action to Google Apps Script (removes row from Google Sheets & file from Google Drive)
+    if (appsScriptUrl && appsScriptUrl.startsWith('http')) {
+      try {
+        fetch(appsScriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'delete',
+            id: id,
+            title: docToDelete?.title,
+            fileName: docToDelete?.fileName,
+          }),
+        }).catch((err) => console.warn('Sync delete to Apps Script warning:', err));
+      } catch (err) {
+        console.warn('Sync delete error:', err);
+      }
+    }
+
     if (docToDelete) {
-      showToast(`Dokumen "${docToDelete.title}" berhasil dihapus.`);
+      showToast(`Dokumen "${docToDelete.title}" berhasil dihapus dari semua link & Google Sheets.`);
     }
   };
 

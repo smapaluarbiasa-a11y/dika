@@ -45,8 +45,8 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
             >
               Hapus Dokumen Naskah?
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Tindakan ini permanen dan berkas akan dihapus dari repositori panitia.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+              Tindakan ini permanen. Dokumen akan langsung ikut terhapus di database server, seluruh link/perangkat lain, serta baris di Google Sheets &amp; Drive.
             </p>
           </div>
           <button

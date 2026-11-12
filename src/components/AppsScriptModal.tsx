@@ -81,6 +81,51 @@ function doPost(e) {
     
     const payload = JSON.parse(e.postData.contents);
     
+    // 1. TANGANI AKSI HAPUS: Baris di Google Sheets & Berkas di Drive otomatis ikut terhapus!
+    if (payload.action === "delete" || payload.action === "hapus") {
+      const data = sheet.getDataRange().getValues();
+      let deletedCount = 0;
+      
+      // Loop dari bawah ke atas agar indeks baris tidak bergeser saat baris dihapus
+      for (let i = data.length - 1; i >= 1; i--) {
+        const rowId = String(data[i][0] || "").trim();
+        const rowTitle = String(data[i][1] || "").trim();
+        const rowFileName = String(data[i][6] || "").trim();
+        const rowDriveUrl = String(data[i][8] || "").trim();
+        
+        const isMatch = (payload.id && rowId === String(payload.id).trim()) ||
+                        (payload.fileName && rowFileName === String(payload.fileName).trim()) ||
+                        (payload.title && rowTitle === String(payload.title).trim());
+                        
+        if (isMatch) {
+          // Hapus berkas dari Google Drive jika ada link
+          try {
+            if (rowDriveUrl && rowDriveUrl.indexOf("drive.google.com") !== -1) {
+              const match = rowDriveUrl.match(/[-\\w]{25,}/);
+              if (match && match[0]) {
+                DriveApp.getFileById(match[0]).setTrashed(true);
+              }
+            }
+          } catch (driveErr) {
+            // Abaikan jika file drive sudah tidak ada
+          }
+          
+          sheet.deleteRow(i + 1);
+          deletedCount++;
+        }
+      }
+      
+      return createJsonResponse({
+        status: "success",
+        action: "delete",
+        deletedCount: deletedCount,
+        message: deletedCount > 0 
+          ? "Baris naskah soal dan file di Google Drive berhasil dihapus." 
+          : "Naskah soal tidak ditemukan di baris Google Sheets."
+      });
+    }
+    
+    // 2. TANGANI AKSI UNGGAH / TAMBAH NASKAH BARU
     // Simpan file ke Google Drive jika ada file data base64
     let fileDriveUrl = "-";
     if (payload.fileBase64 && payload.fileName) {
