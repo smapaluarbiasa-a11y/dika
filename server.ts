@@ -2,6 +2,8 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { INITIAL_DOCUMENTS } from './src/data/initialData';
 import { ExamDocument } from './src/types/naskah';
@@ -250,6 +252,150 @@ app.post('/api/config', (req, res) => {
 app.post('/api/reset-demo', (req, res) => {
   saveDocuments(INITIAL_DOCUMENTS);
   res.json({ status: 'success', message: 'Database naskah telah direset ke data awal resmi.' });
+});
+
+// ======================== XAMPP ZIP BUILDER ========================
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buf: Buffer): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    crc = CRC32_TABLE[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function buildZipArchive(entries: { name: string; data: Buffer }[]): Buffer {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const fileNameBuf = Buffer.from(entry.name.replace(/\\/g, '/'), 'utf8');
+    const uncompressed = entry.data;
+    const compressed = zlib.deflateRawSync(uncompressed);
+    const crc = crc32(uncompressed);
+
+    // Local file header (30 bytes + filename)
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4); // version needed
+    localHeader.writeUInt16LE(0x0800, 6); // UTF-8 flag
+    localHeader.writeUInt16LE(8, 8); // compression method: deflate
+    localHeader.writeUInt16LE(0, 10); // mod time
+    localHeader.writeUInt16LE(0x5421, 12); // mod date
+    localHeader.writeUInt32LE(crc, 14);
+    localHeader.writeUInt32LE(compressed.length, 18);
+    localHeader.writeUInt32LE(uncompressed.length, 22);
+    localHeader.writeUInt16LE(fileNameBuf.length, 26);
+    localHeader.writeUInt16LE(0, 28); // extra len
+
+    localParts.push(localHeader, fileNameBuf, compressed);
+
+    // Central directory header (46 bytes + filename)
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4); // version made by
+    centralHeader.writeUInt16LE(20, 6); // version needed
+    centralHeader.writeUInt16LE(0x0800, 8); // UTF-8 flag
+    centralHeader.writeUInt16LE(8, 10); // deflate
+    centralHeader.writeUInt16LE(0, 12);
+    centralHeader.writeUInt16LE(0x5421, 14);
+    centralHeader.writeUInt32LE(crc, 16);
+    centralHeader.writeUInt32LE(compressed.length, 20);
+    centralHeader.writeUInt32LE(uncompressed.length, 24);
+    centralHeader.writeUInt16LE(fileNameBuf.length, 28);
+    centralHeader.writeUInt16LE(0, 30); // extra len
+    centralHeader.writeUInt16LE(0, 32); // comment len
+    centralHeader.writeUInt16LE(0, 34); // disk start
+    centralHeader.writeUInt16LE(0, 36); // internal attrs
+    centralHeader.writeUInt32LE(0, 38); // external attrs
+    centralHeader.writeUInt32LE(offset, 42); // relative offset
+
+    centralParts.push(centralHeader, fileNameBuf);
+    offset += localHeader.length + fileNameBuf.length + compressed.length;
+  }
+
+  const centralDir = Buffer.concat(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralDir.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  eocd.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...localParts, centralDir, eocd]);
+}
+
+function collectFilesRecursively(dir: string, baseDir: string): { name: string; data: Buffer }[] {
+  const results: { name: string; data: Buffer }[] = [];
+  if (!fs.existsSync(dir)) return results;
+
+  for (const item of fs.readdirSync(dir)) {
+    const fullPath = path.join(dir, item);
+    const stat = fs.statSync(fullPath);
+    if (stat.isDirectory()) {
+      results.push(...collectFilesRecursively(fullPath, baseDir));
+    } else if (stat.isFile()) {
+      const relPath = path.relative(baseDir, fullPath);
+      results.push({
+        name: `upload-soal/${relPath}`,
+        data: fs.readFileSync(fullPath),
+      });
+    }
+  }
+  return results;
+}
+
+// 7. Download ready-to-install XAMPP package (.zip)
+app.get('/api/download-xampp', (req, res) => {
+  try {
+    const distDir = path.resolve(__dirname, 'dist');
+    const distIndex = path.join(distDir, 'index.html');
+    if (!fs.existsSync(distIndex)) {
+      execSync('npx vite build', { cwd: __dirname, stdio: 'ignore' });
+    }
+
+    const entries = collectFilesRecursively(distDir, distDir);
+    const xamppDir = path.resolve(__dirname, 'xampp');
+    const xamppFiles = ['api.php', '.htaccess', 'database.sql', 'CARA_INSTALL_XAMPP.txt'];
+
+    for (const fileName of xamppFiles) {
+      const filePath = path.join(xamppDir, fileName);
+      if (fs.existsSync(filePath)) {
+        entries.push({
+          name: `upload-soal/${fileName}`,
+          data: fs.readFileSync(filePath),
+        });
+      }
+    }
+
+    const zipBuffer = buildZipArchive(entries);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="upload-soal-sman1pakem-xampp.zip"');
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    res.send(zipBuffer);
+  } catch (err: any) {
+    console.error('Failed to build XAMPP ZIP:', err);
+    res.status(500).json({
+      status: 'error',
+      message: err?.message || 'Gagal menyiapkan paket ZIP XAMPP.',
+    });
+  }
 });
 
 // ======================== VITE & STATIC HANDLING ========================

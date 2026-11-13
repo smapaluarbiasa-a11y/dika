@@ -1,0 +1,37 @@
+====================================================================
+PANDUAN INSTALASI UPLOAD SOAL SMAN 1 PAKEM DI XAMPP (WINDOWS / MAC)
+====================================================================
+
+1. BUKA FOLDER HTDOCS XAMPP
+   - Biasanya berada di: C:\xampp\htdocs\ (Windows)
+     atau /Applications/XAMPP/htdocs/ (macOS)
+
+2. BUAT FOLDER BARU & EKSTRAK FILE ZIP
+   - Buat folder baru di dalam htdocs, misalnya:
+     C:\xampp\htdocs\upload-soal\
+   - Ekstrak seluruh isi file ZIP ini ke dalam folder tersebut
+     sehingga di dalamnya terdapat file index.html, api.php, .htaccess,
+     database.sql, dan folder assets/.
+
+3. NYALAKAN XAMPP CONTROL PANEL
+   - Buka aplikasi XAMPP Control Panel.
+   - Klik tombol "Start" pada modul APACHE.
+   - (Opsional) Nyalakan "MySQL" hanya jika Anda ingin memakai phpMyAdmin.
+     Secara default, aplikasi ini langsung berjalan dengan:
+     * Penyimpanan lokal XAMPP (api.php -> folder xampp_data)
+     * Firebase Firestore Cloud (sinkronisasi online otomatis)
+     * Google Apps Script / Spreadsheet (opsional via tombol di aplikasi)
+
+4. BUKA DI BROWSER
+   - Akses alamat berikut di Chrome / Edge / Firefox:
+     http://localhost/upload-soal/
+
+5. OPSIONAL: MENGGUNAKAN DATABASE MYSQL (PHPMYADMIN)
+   - Buka http://localhost/phpmyadmin
+   - Klik menu Import > pilih file `database.sql` > klik Go.
+   - Buka file `api.php` dengan Notepad/VS Code, ubah baris:
+     $USE_MYSQL = false;
+     menjadi:
+     $USE_MYSQL = true;
+   - Simpan file `api.php`.
+====================================================================

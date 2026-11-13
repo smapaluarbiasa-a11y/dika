@@ -1,0 +1,19 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Arahkan request /api/* ke api.php di folder yang sama
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
+
+  # SPA fallback ke index.html jika file fisik tidak ditemukan
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|php|json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>

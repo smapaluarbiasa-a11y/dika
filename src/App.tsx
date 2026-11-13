@@ -9,6 +9,7 @@ import { VerificationModal } from './components/VerificationModal';
 import { OfficialTemplatesModal } from './components/OfficialTemplatesModal';
 import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { AppsScriptModal } from './components/AppsScriptModal';
+import { XamppDownloadModal } from './components/XamppDownloadModal';
 import { INITIAL_DOCUMENTS } from './data/initialData';
 import {
   ExamDocument,
@@ -23,6 +24,7 @@ import {
   getSubjectMonitoringList,
 } from './utils/recapLogic';
 import { downloadFile } from './utils/templates';
+import { apiFetch } from './utils/apiClient';
 import {
   FileText,
   Table,
@@ -69,6 +71,7 @@ export default function App() {
   const [uploadSubject, setUploadSubject] = useState<SubjectName | undefined>(undefined);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAppsScriptOpen, setIsAppsScriptOpen] = useState<boolean>(false);
+  const [isXamppModalOpen, setIsXamppModalOpen] = useState<boolean>(false);
   const [previewDocument, setPreviewDocument] = useState<ExamDocument | null>(null);
   const [verifyingDocument, setVerifyingDocument] = useState<ExamDocument | null>(null);
   const [documentToDelete, setDocumentToDelete] = useState<ExamDocument | null>(null);
@@ -98,9 +101,9 @@ export default function App() {
   const fetchFromServer = async (silent = false) => {
     let loaded = false;
 
-    // 1. First try /api/documents (Node server or Vercel serverless)
+    // 1. First try /api/documents (Node server, Vercel serverless, or XAMPP api.php)
     try {
-      const res = await fetch('/api/documents');
+      const res = await apiFetch('documents');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.documents) && data.documents.length > 0) {
@@ -164,7 +167,7 @@ export default function App() {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch('/api/config');
+      const res = await apiFetch('config');
       if (res.ok) {
         const data = await res.json();
         if (data.config && data.config.appsScriptUrl) {
@@ -262,7 +265,7 @@ export default function App() {
     } catch {}
 
     // Persist to server config so all links share the same Google Sheets destination
-    fetch('/api/config', {
+    apiFetch('config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appsScriptUrl: cleanUrl }),
@@ -281,8 +284,8 @@ export default function App() {
       console.warn('Firestore save warning:', err);
     });
 
-    // 3. Persist to server database (multi-link backup)
-    fetch('/api/documents', {
+    // 3. Persist to server database (Node, Vercel, or XAMPP api.php)
+    apiFetch('documents', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -390,7 +393,7 @@ export default function App() {
     }
 
     // Persist status change to server
-    fetch(`/api/documents/${id}/status`, {
+    apiFetch(`documents/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, feedback }),
@@ -432,8 +435,8 @@ export default function App() {
       }
     } catch {}
 
-    // 1. Delete from server database (syncs across all links, browsers & devices)
-    fetch(`/api/documents/${id}`, {
+    // 1. Delete from server database (syncs across all links, browsers, devices & XAMPP)
+    apiFetch(`documents/${id}`, {
       method: 'DELETE',
     })
       .then((res) => {
@@ -547,6 +550,7 @@ Tervalidasi di portal Upload Soal SMAN 1 Pakem.`;
         }}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
         onOpenAppsScript={() => setIsAppsScriptOpen(true)}
+        onOpenXampp={() => setIsXamppModalOpen(true)}
         onExportExcel={handleExportExcel}
         onExportCsv={handleExportCsv}
         isAppsScriptConnected={!!appsScriptUrl}
@@ -688,6 +692,12 @@ Tervalidasi di portal Upload Soal SMAN 1 Pakem.`;
         onClose={() => setIsAppsScriptOpen(false)}
         appsScriptUrl={appsScriptUrl}
         onSaveUrl={handleSaveAppsScriptUrl}
+      />
+
+      {/* 7. XAMPP Download & Installation Modal */}
+      <XamppDownloadModal
+        isOpen={isXamppModalOpen}
+        onClose={() => setIsXamppModalOpen(false)}
       />
 
       {/* Floating Notification Toast */}

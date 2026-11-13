@@ -5,12 +5,14 @@ import {
   BookOpen,
   FileSpreadsheet,
   Database,
+  Server,
 } from 'lucide-react';
 
 interface HeaderProps {
   onOpenUpload: () => void;
   onOpenTemplates?: () => void;
   onOpenAppsScript?: () => void;
+  onOpenXampp?: () => void;
   onExportExcel: () => void;
   onExportCsv: () => void;
   isAppsScriptConnected?: boolean;
@@ -20,6 +22,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onOpenUpload,
   onOpenAppsScript,
+  onOpenXampp,
   onExportExcel,
   onExportCsv,
   isAppsScriptConnected,
@@ -103,6 +106,18 @@ export const Header: React.FC<HeaderProps> = ({
                 {isAppsScriptConnected && (
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Tersambung ke Google Sheets"></span>
                 )}
+              </button>
+            )}
+
+            {/* Download Paket XAMPP Button */}
+            {onOpenXampp && (
+              <button
+                onClick={onOpenXampp}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-orange-700 dark:text-orange-300 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-950/60 border border-orange-300 dark:border-orange-800 rounded-xl transition-all cursor-pointer shadow-2xs"
+                title="Unduh Paket Instalasi Aplikasi untuk XAMPP (htdocs)"
+              >
+                <Server className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                <span>Download XAMPP</span>
               </button>
             )}
 
