@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidExamDocument(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() <= 100 &&
+             data.grade is string && data.grade.size() > 0 && data.grade.size() <= 50 &&
+             data.fileName is string && data.fileName.size() > 0 && data.fileName.size() <= 255 &&
+             data.fileFormat in ['pdf', 'docx', 'doc'] &&
+             data.status in ['Disetujui', 'Menunggu Review', 'Perlu Revisi'];
+    }
+
+    // Exam Documents Collection: SMAN 1 Pakem Naskah Soal
+    match /exam_documents/{documentId} {
+      allow read: if true;
+      allow create: if isValidId(documentId) && isValidExamDocument(request.resource.data);
+      allow update: if isValidId(documentId) && isValidExamDocument(request.resource.data);
+      allow delete: if isValidId(documentId);
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "ExamDocument": {
+      "title": "ExamDocument",
+      "description": "Naskah soal ujian dan asesmen sekolah SMAN 1 Pakem",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik dokumen naskah soal",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Judul lengkap naskah soal",
+          "maxLength": 300
+        },
+        "subject": {
+          "type": "string",
+          "description": "Nama salah satu dari 21 mata pelajaran resmi",
+          "maxLength": 100
+        },
+        "grade": {
+          "type": "string",
+          "description": "Tingkat kelas (Kelas X, Kelas XI, Kelas XII)",
+          "maxLength": 50
+        },
+        "assessmentType": {
+          "type": "string",
+          "description": "Jenis asesmen (ASAS, ASTS, Asesmen Sekolah, Formatif)",
+          "maxLength": 80
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "Alokasi waktu pengerjaan dalam satuan menit"
+        },
+        "estimatedQuestions": {
+          "type": "number",
+          "description": "Estimasi jumlah butir soal"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Nama file berkas asli (.pdf, .docx, .doc)",
+          "maxLength": 255
+        },
+        "fileFormat": {
+          "type": "string",
+          "description": "Format ekstensi berkas",
+          "enum": ["pdf", "docx", "doc"]
+        },
+        "fileSizeBytes": {
+          "type": "number",
+          "description": "Ukuran file dalam bytes"
+        },
+        "fileDataUrl": {
+          "type": "string",
+          "description": "Data URL base64 atau link cloud storage berkas",
+          "maxLength": 10000000
+        },
+        "uploadedAt": {
+          "type": "string",
+          "description": "Waktu unggah dokumen dalam format ISO 8601",
+          "maxLength": 50
+        },
+        "status": {
+          "type": "string",
+          "description": "Status verifikasi panitia asesmen",
+          "enum": ["Disetujui", "Menunggu Review", "Perlu Revisi"]
+        },
+        "committeeNotes": {
+          "type": "string",
+          "description": "Catatan tambahan dari guru pengunggah",
+          "maxLength": 2000
+        },
+        "revisionFeedback": {
+          "type": "string",
+          "description": "Catatan revisi dari panitia kurikulum",
+          "maxLength": 2000
+        },
+        "verifiedBy": {
+          "type": "string",
+          "description": "Nama verifikator atau panitia",
+          "maxLength": 150
+        },
+        "verifiedAt": {
+          "type": "string",
+          "description": "Waktu verifikasi dokumen dalam format ISO 8601",
+          "maxLength": 50
+        }
+      },
+      "required": ["id", "title", "subject", "grade", "fileName", "fileFormat", "status"]
+    }
+  },
+  "firestore": {
+    "/exam_documents/{documentId}": {
+      "schema": {
+        "$ref": "#/entities/ExamDocument"
+      },
+      "description": "Koleksi naskah soal asesmen 21 mata pelajaran SMAN 1 Pakem"
+    }
+  }
+}

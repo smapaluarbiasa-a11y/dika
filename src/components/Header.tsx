@@ -14,6 +14,7 @@ interface HeaderProps {
   onExportExcel: () => void;
   onExportCsv: () => void;
   isAppsScriptConnected?: boolean;
+  isFirebaseConnected?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportExcel,
   onExportCsv,
   isAppsScriptConnected,
+  isFirebaseConnected = true,
 }) => {
   return (
     <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-30 shadow-2xs">
@@ -34,9 +36,9 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden sm:inline text-slate-400">Monitoring 21 Mata Pelajaran</span>
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Database Server Sinkron Antar Link
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            Database Firebase Firestore Cloud
           </span>
           <span className="bg-blue-600/20 text-blue-300 px-2 py-0.5 rounded-md text-[11px] font-bold border border-blue-500/30">
             T.A. 2026/2027

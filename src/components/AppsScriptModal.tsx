@@ -50,17 +50,22 @@ function doGet(e) {
     
     const documents = rows.map((row, idx) => ({
       no: idx + 1,
-      id: row[0],
-      title: row[1],
-      subject: row[2],
-      grade: row[3],
+      id: String(row[0] || "doc-" + (idx + 1)),
+      title: String(row[1] || "-"),
+      subject: String(row[2] || "BIOLOGI"),
+      grade: String(row[3] || "Kelas X"),
+      durationMinutes: parseInt(String(row[4])) || 90,
+      estimatedQuestions: parseInt(String(row[5])) || 40,
+      fileName: String(row[6] || "naskah_soal.pdf"),
+      fileFormat: String(row[7] || "").toLowerCase().includes("pdf") ? "pdf" : "docx",
+      fileDataUrl: String(row[8] || ""),
+      uploadedAt: String(row[9] || new Date().toISOString()),
+      status: String(row[10] || "Menunggu Review"),
+      committeeNotes: String(row[11] || "-"),
+      fileSizeBytes: 1800000,
       duration: row[4],
       questions: row[5],
-      fileName: row[6],
-      fileFormat: row[7],
       driveUrl: row[8],
-      uploadedAt: row[9],
-      status: row[10],
       notes: row[11]
     }));
     
@@ -485,6 +490,37 @@ export const AppsScriptModal: React.FC<AppsScriptModalProps> = ({
                     <span>Tersambung ke: <code className="font-mono text-slate-700 dark:text-slate-300 truncate max-w-sm inline-block align-bottom">{appsScriptUrl}</code></span>
                   </div>
                 )}
+              </div>
+
+              {/* Box Khusus Deploy ke Vercel (https://vercel.com/) */}
+              <div className="p-5 rounded-2xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/30 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-black text-white flex items-center justify-center font-black text-xs">
+                    ▲
+                  </span>
+                  <h4 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">
+                    Khusus Deploy dari GitHub ke Vercel (https://vercel.com/):
+                  </h4>
+                </div>
+                <div className="space-y-2 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                  <p>
+                    <strong>Mengapa di Vercel database lokal tidak tersimpan?</strong><br />
+                    Vercel adalah hosting <em>serverless / static</em> yang tidak memiliki harddisk permanen untuk file JSON lokal. Agar database naskah tetap tersimpan permanen dan tersinkronisasi di Vercel, gunakan Google Apps Script ini sebagai database cloud:
+                  </p>
+                  <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-400">
+                    <li>Buka dashboard project Anda di <a href="https://vercel.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-600 underline font-bold">Vercel.com <ExternalLink className="w-3 h-3 inline" /></a>.</li>
+                    <li>Masuk ke menu <strong>Settings</strong> &gt; pilih <strong>Environment Variables</strong>.</li>
+                    <li>
+                      Tambahkan variabel baru:<br />
+                      &bull; Key: <code className="bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.5 rounded font-mono font-bold">VITE_APPS_SCRIPT_URL</code><br />
+                      &bull; Value: <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300">{urlInput || appsScriptUrl || 'URL Web App Google Apps Script Anda'}</span>
+                    </li>
+                    <li>Klik <strong>Save</strong>, lalu lakukan <strong>Redeploy</strong> (Deploy ulang) di menu Deployments Vercel.</li>
+                  </ol>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold pt-1">
+                    ✓ Setelah Redeploy, aplikasi di link Vercel Anda otomatis membaca dan menyimpan semua soal langsung ke Google Sheets &amp; Google Drive secara permanen!
+                  </p>
+                </div>
               </div>
             </div>
           )}

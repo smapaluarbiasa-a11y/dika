@@ -28,6 +28,12 @@ import {
   Table,
   CheckCircle2,
 } from 'lucide-react';
+import {
+  testFirestoreConnection,
+  subscribeToExamDocuments,
+  saveExamDocumentToFirestore,
+  deleteExamDocumentFromFirestore,
+} from './firebase';
 
 export default function App() {
   const [documents, setDocuments] = useState<ExamDocument[]>(() => {
@@ -56,6 +62,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'documents' | 'monitoring'>('documents');
   const [isServerOnline, setIsServerOnline] = useState<boolean>(true);
+  const [isFirebaseReady, setIsFirebaseReady] = useState<boolean>(false);
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
@@ -66,9 +73,13 @@ export default function App() {
   const [verifyingDocument, setVerifyingDocument] = useState<ExamDocument | null>(null);
   const [documentToDelete, setDocumentToDelete] = useState<ExamDocument | null>(null);
 
-  // Google Apps Script Web App Integration
+  // Google Apps Script Web App Integration (supports Vercel env variable & local storage)
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(() => {
     try {
+      const envUrl = (import.meta as any).env?.VITE_APPS_SCRIPT_URL;
+      if (envUrl && typeof envUrl === 'string' && envUrl.trim().startsWith('http')) {
+        return envUrl.trim();
+      }
       return localStorage.getItem('sim_naskah_apps_script_url') || '';
     } catch {
       return '';
@@ -83,26 +94,70 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Synchronize with server database (enables multi-link and multi-browser sync)
+  // Synchronize with server database & Google Apps Script (works on Cloud Run & Vercel)
   const fetchFromServer = async (silent = false) => {
+    let loaded = false;
+
+    // 1. First try /api/documents (Node server or Vercel serverless)
     try {
       const res = await fetch('/api/documents');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.documents)) {
+        if (Array.isArray(data.documents) && data.documents.length > 0) {
           setDocuments(data.documents);
           try {
             localStorage.setItem('sim_naskah_documents_v2', JSON.stringify(data.documents));
-          } catch {
-            // storage quota fallback
-          }
+          } catch {}
           setIsServerOnline(true);
+          loaded = true;
+          return;
         }
       }
     } catch (e) {
       if (!silent) {
         console.warn('Server fetch error:', e);
       }
+    }
+
+    // 2. Direct Google Apps Script fallback (vital for Vercel deployments)
+    const scriptUrl = appsScriptUrl || (import.meta as any).env?.VITE_APPS_SCRIPT_URL;
+    if (scriptUrl && scriptUrl.startsWith('http')) {
+      try {
+        const res = await fetch(scriptUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.documents) && data.documents.length > 0) {
+            const mapped: ExamDocument[] = data.documents.map((d: any, idx: number) => ({
+              id: d.id || `doc-gas-${idx}`,
+              title: d.title || 'Naskah Soal',
+              subject: d.subject || 'BIOLOGI',
+              grade: d.grade || 'Kelas X',
+              assessmentType: d.assessmentType || 'ASAS',
+              durationMinutes: Number(d.durationMinutes) || parseInt(d.duration) || 90,
+              estimatedQuestions: Number(d.estimatedQuestions) || parseInt(d.questions) || 40,
+              fileName: d.fileName || 'naskah_soal.pdf',
+              fileFormat: String(d.fileFormat || '').toLowerCase().includes('pdf') ? 'pdf' : 'docx',
+              fileSizeBytes: Number(d.fileSizeBytes) || 1800000,
+              uploadedAt: d.uploadedAt || new Date().toISOString(),
+              status: (d.status as VerificationStatus) || 'Menunggu Review',
+              committeeNotes: d.notes || d.committeeNotes || '',
+              fileDataUrl: d.driveUrl || d.fileDataUrl || '',
+            }));
+            setDocuments(mapped);
+            try {
+              localStorage.setItem('sim_naskah_documents_v2', JSON.stringify(mapped));
+            } catch {}
+            setIsServerOnline(true);
+            loaded = true;
+            return;
+          }
+        }
+      } catch (gasErr) {
+        if (!silent) console.warn('Direct Apps Script fetch warning on Vercel:', gasErr);
+      }
+    }
+
+    if (!loaded) {
       setIsServerOnline(false);
     }
   };
@@ -113,7 +168,7 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.config && data.config.appsScriptUrl) {
-          setAppsScriptUrl(data.config.appsScriptUrl);
+          setAppsScriptUrl((prev) => prev || data.config.appsScriptUrl);
           try {
             localStorage.setItem('sim_naskah_apps_script_url', data.config.appsScriptUrl);
           } catch {}
@@ -122,8 +177,44 @@ export default function App() {
     } catch {}
   };
 
-  // Setup cross-tab broadcast channel for instantaneous syncing in the same browser
+  // Setup Real-time Firebase Firestore database & multi-link sync
   useEffect(() => {
+    // 1. Verify Firestore Connection
+    testFirestoreConnection().then((connected) => {
+      if (connected) {
+        setIsFirebaseReady(true);
+        setIsServerOnline(true);
+      }
+    });
+
+    // 2. Real-time Firestore sync (instant updates across dev, preview, and Vercel links)
+    let unsubscribeFirestore: (() => void) | null = null;
+    try {
+      unsubscribeFirestore = subscribeToExamDocuments(
+        (firestoreDocs) => {
+          if (firestoreDocs && firestoreDocs.length > 0) {
+            setDocuments(firestoreDocs);
+            try {
+              localStorage.setItem('sim_naskah_documents_v2', JSON.stringify(firestoreDocs));
+            } catch {}
+            setIsFirebaseReady(true);
+            setIsServerOnline(true);
+          } else if (firestoreDocs && firestoreDocs.length === 0) {
+            // Seed Firestore with official initial documents if empty
+            INITIAL_DOCUMENTS.forEach((docItem) => {
+              saveExamDocumentToFirestore(docItem).catch(() => {});
+            });
+          }
+        },
+        (err) => {
+          console.warn('Firestore subscription fallback:', err);
+        }
+      );
+    } catch (e) {
+      console.warn('Firestore subscribe error:', e);
+    }
+
+    // 3. Fallback server polling & config
     fetchFromServer();
     fetchConfig();
 
@@ -137,10 +228,9 @@ export default function App() {
       }
     } catch {}
 
-    // Fast auto-sync every 2.5 seconds so changes/deletions on other links/devices appear almost instantly
     const interval = setInterval(() => {
       fetchFromServer(true);
-    }, 2500);
+    }, 4000);
 
     const onFocus = () => {
       fetchFromServer(true);
@@ -149,6 +239,11 @@ export default function App() {
     window.addEventListener('focus', onFocus);
 
     return () => {
+      if (unsubscribeFirestore) {
+        try {
+          unsubscribeFirestore();
+        } catch {}
+      }
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       if (channel) {
@@ -181,7 +276,12 @@ export default function App() {
     // 1. Optimistic local update
     setDocuments((prev) => [newDoc, ...prev.filter((d) => d.id !== newDoc.id)]);
 
-    // 2. Persist to server database (syncs across all links & browsers)
+    // 2. Persist to Firebase Firestore Cloud Database (Instant Real-time Sync)
+    saveExamDocumentToFirestore(newDoc).catch((err) => {
+      console.warn('Firestore save warning:', err);
+    });
+
+    // 3. Persist to server database (multi-link backup)
     fetch('/api/documents', {
       method: 'POST',
       headers: {
@@ -277,6 +377,18 @@ export default function App() {
       );
     }
 
+    // Update in Firebase Firestore Cloud Database
+    const targetDoc = documents.find((d) => d.id === id);
+    if (targetDoc) {
+      saveExamDocumentToFirestore({
+        ...targetDoc,
+        status,
+        revisionFeedback: feedback ?? targetDoc.revisionFeedback,
+        verifiedBy: 'Panitia Kurikulum & Asesmen',
+        verifiedAt: new Date().toISOString(),
+      }).catch((err) => console.warn('Firestore status update warning:', err));
+    }
+
     // Persist status change to server
     fetch(`/api/documents/${id}/status`, {
       method: 'PATCH',
@@ -305,6 +417,11 @@ export default function App() {
     if (previewDocument && previewDocument.id === id) {
       setPreviewDocument(null);
     }
+
+    // Delete from Firebase Firestore Cloud Database
+    deleteExamDocumentFromFirestore(id).catch((err) => {
+      console.warn('Firestore delete warning:', err);
+    });
 
     // Broadcast delete event across all tabs in this browser
     try {
@@ -433,6 +550,7 @@ Tervalidasi di portal Upload Soal SMAN 1 Pakem.`;
         onExportExcel={handleExportExcel}
         onExportCsv={handleExportCsv}
         isAppsScriptConnected={!!appsScriptUrl}
+        isFirebaseConnected={isFirebaseReady}
       />
 
       {/* Main Container */}
